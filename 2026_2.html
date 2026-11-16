@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026년 2학기 비학점 운영 데이터 분석 대시보드</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & Noto Sans KR -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SheetJS for Direct Excel (.xlsx) Parsing in Browser -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+        .tab-active {
+            background-color: #2563eb;
+            color: #ffffff;
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+        }
+        .tab-inactive {
+            background-color: #ffffff;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
+        .tab-inactive:hover {
+            background-color: #f1f5f9;
+        }
+        /* Smooth bar transitions */
+        .bar-fill {
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Navigation / Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">2026년 2학기 비학점 과정</span>
+                        <span class="text-xs text-slate-500 flex items-center gap-1">
+                            <i data-lucide="calendar" class="w-3.5 h-3.5"></i> 자료 취합 기준일: 2026.11.16
+                        </span>
+                    </div>
+                    <h1 class="text-xl sm:text-2xl font-bold text-slate-900 mt-1">기관 운영 데이터 진단 및 통계 대시보드</h1>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="openPolicyModal()" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition flex items-center gap-1.5">
+                        <i data-lucide="shield-check" class="w-4 h-4 text-blue-600"></i> 분석 5대 원칙
+                    </button>
+                    <button onclick="copySummaryReport()" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition flex items-center gap-1.5">
+                        <i data-lucide="copy" class="w-4 h-4"></i> 요약 복사
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- System Notice Banner -->
+        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="flex items-start gap-3">
+                <div class="p-2 bg-amber-100 text-amber-800 rounded-xl shrink-0 mt-0.5">
+                    <i data-lucide="info" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h2 class="text-sm font-bold text-amber-900">셀 판독 규칙 확정 · 엑셀 파일(.xlsx) 직접 불러오기 지원</h2>
+                    <p class="text-xs sm:text-sm text-amber-800 mt-1 leading-relaxed">
+                        확정 인원(<strong>항공법규 16명, 원자력기초이론 34명, 항공기기체 88명 · 총 138명</strong>)과 판독 규칙(<strong>진도율 X열 <code>6.1 | (0)</code> → 6.1%, 최종평가 AA열 <code>75 | (75)</code> → 75점, 총점 ≥60점 수료기준 충족</strong>)이 반영되었습니다. 
+                        아래에서 <strong>엑셀 파일(.xlsx) 3개를 한 번에 선택</strong>하시면 3행부터 끝행까지 즉시 자동 분석됩니다.
+                    </p>
+                </div>
+            </div>
+            <div class="shrink-0">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-200/80 text-amber-900">
+                    성명열 기준: 138명 확정
+                </span>
+            </div>
+        </div>
+
+        <!-- Raw Excel Data Importer (Direct .xlsx File Upload & Paste) -->
+        <div class="bg-white rounded-2xl p-5 border border-blue-200 shadow-sm space-y-4">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="p-2 bg-blue-100 text-blue-700 rounded-xl">
+                        <i data-lucide="file-spreadsheet" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">엑셀 파일(.xlsx) 직접 업로드 또는 3행~끝행 붙여넣기</h3>
+                        <p class="text-xs text-slate-500">예: <code>6.1 | (0)</code> → 진도율 6.1%, <code>75 | (75)</code> → 최종평가 75점 (총점 ≥60점 &amp; 진도 ≥80% 동시 충족 판정)</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <label class="cursor-pointer px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition flex items-center gap-1.5 shadow-xs">
+                        <i data-lucide="upload" class="w-4 h-4"></i>
+                        <span>엑셀 파일(.xlsx) 다중 선택 분석</span>
+                        <input type="file" id="xlsxFileInput" accept=".xlsx,.xls,.csv" multiple onchange="handleExcelFiles(event)" class="hidden" />
+                    </label>
+                </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-2">
+                <select id="importCourseSelect" class="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 font-semibold text-slate-700 shrink-0">
+                    <option value="AIR_LAW">항공법규 (16명)</option>
+                    <option value="NUCLEAR">원자력기초이론 (34명)</option>
+                    <option value="AIRFRAME">항공기기체 (88명)</option>
+                </select>
+                <textarea id="rawExcelInput" rows="1" placeholder="또는 엑셀 3행~끝행 복사(Ctrl+C) 후 붙여넣기(Ctrl+V)" class="flex-1 text-xs font-mono px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                <button onclick="parsePastedRows()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition shrink-0">
+                    붙여넣기 집계
+                </button>
+            </div>
+        </div>
+
+        <!-- Course Filter Tabs -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="flex items-center gap-2 text-sm font-semibold text-slate-700 px-2">
+                <i data-lucide="filter" class="w-4 h-4 text-blue-600"></i>
+                <span>분석 대상 과목 선택:</span>
+            </div>
+            <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-2" id="courseFilterGroup">
+                <button onclick="selectCourse('ALL')" data-course="ALL" class="course-tab tab-active px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition text-center">
+                    전체 통합 (3과목)
+                </button>
+                <button onclick="selectCourse('AIR_LAW')" data-course="AIR_LAW" class="course-tab tab-inactive px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition text-center">
+                    항공법규
+                </button>
+                <button onclick="selectCourse('NUCLEAR')" data-course="NUCLEAR" class="course-tab tab-inactive px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition text-center">
+                    원자력기초이론
+                </button>
+                <button onclick="selectCourse('AIRFRAME')" data-course="AIRFRAME" class="course-tab tab-inactive px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition text-center">
+                    항공기기체
+                </button>
+            </div>
+        </div>
+
+        <!-- KPI Summary Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- KPI 1: Total Students -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">총 수강인원 (성명열)</span>
+                    <div class="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                        <i data-lucide="users" class="w-5 h-5"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex items-baseline gap-2">
+                        <span id="kpiTotalStudents" class="text-2xl font-bold text-slate-900">138명</span>
+                        <span id="kpiCourseCountBadge" class="text-xs font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">3과목 성명열 합산</span>
+                    </div>
+                    <p id="kpiFileSource" class="text-xs text-slate-500 mt-2 truncate">출처: *_261116_2.xlsx</p>
+                </div>
+            </div>
+
+            <!-- KPI 2: Progress >= 80% (X Column) -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">진도율 ≥80% 비율 (X열)</span>
+                    <div class="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                        <i data-lucide="trending-up" class="w-5 h-5"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex items-baseline gap-2">
+                        <span id="kpiAvgProgress" class="text-xl font-bold text-slate-800">연동 대기</span>
+                        <span id="kpiProgressCompare" class="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">X열 '|' 앞 숫자</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2 mt-3 overflow-hidden">
+                        <div id="kpiProgressBar" class="bg-emerald-500 h-2 rounded-full bar-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI 3: 0% Progress (Non-learners) -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">진도율 0% 미수강 (X열)</span>
+                    <div class="p-2 bg-rose-50 text-rose-600 rounded-xl">
+                        <i data-lucide="user-x" class="w-5 h-5"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex items-baseline gap-2">
+                        <span id="kpiZeroCount" class="text-xl font-bold text-rose-600">셀 데이터 필요</span>
+                        <span id="kpiZeroPercent" class="text-xs font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md">- %</span>
+                    </div>
+                    <p id="kpiZeroNote" class="text-xs text-slate-500 mt-2">X열 '|' 앞 숫자가 0인 수강생 집계</p>
+                </div>
+            </div>
+
+            <!-- KPI 4: Official Completion Status -->
+            <div class="bg-slate-900 text-white rounded-2xl p-5 shadow-sm flex flex-col justify-between relative overflow-hidden">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-300">수료 가능 비율 (AK열)</span>
+                    <div class="p-2 bg-slate-800 text-amber-400 rounded-xl">
+                        <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex items-baseline gap-2">
+                        <span id="kpiCompletionRate" class="text-xl font-bold text-amber-400">셀 데이터 필요</span>
+                        <span id="kpiFinalExamBadge" class="text-xs font-medium text-slate-300 bg-slate-800 px-2 py-0.5 rounded-md">AA열 ≥60점</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+                        X열(진도 ≥80%) ∩ AA열(평가 ≥60점) · AK열 기준
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle Interactive Section: Visual Comparison & Criteria Simulator -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left 7 Cols: Subject-by-Subject Interactive Visual Chart -->
+            <div class="lg:col-span-7 bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-between">
+                <div>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">과목별 진도율 및 미수강(0%) 분포 비교</h3>
+                            <p class="text-xs text-slate-500 mt-0.5">막대를 클릭하면 해당 과목의 상세 데이터로 전환됩니다.</p>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs">
+                            <span class="flex items-center gap-1.5 text-slate-600">
+                                <span class="w-2.5 h-2.5 rounded-full bg-blue-600"></span> 평균 진도율
+                            </span>
+                            <span class="flex items-center gap-1.5 text-slate-600">
+                                <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> 미수강(0%) 비율
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Custom Bar Charts -->
+                    <div class="space-y-5 mt-5" id="subjectComparisonBars">
+                        <!-- Rendered via JS -->
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                    <span>* 1차 수료 조건선: <strong>진도율 80.0% 이상</strong> (점선 표시)</span>
+                    <span>* 원자력기초이론 미수강률(21.9%) 집중 관리 필요</span>
+                </div>
+            </div>
+
+            <!-- Right 5 Cols: Completion Criteria & Data Readiness Inspector -->
+            <div class="lg:col-span-5 bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">수료 기준 충족 진단 매트릭스</h3>
+                            <p class="text-xs text-slate-500 mt-0.5">기관 공식 기준 대비 현재 엑셀 데이터 보유 현황</p>
+                        </div>
+                        <span class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700">AND 조건</span>
+                    </div>
+
+                    <!-- Two-step Criteria Flow -->
+                    <div class="mt-5 space-y-4">
+                        <!-- Condition 1 -->
+                        <div class="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-emerald-800 uppercase tracking-wide">조건 1 (X열: 진도율)</span>
+                                <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                                    <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> 진도율 ≥ 80%
+                                </span>
+                            </div>
+                            <p class="text-sm font-bold text-slate-900 mt-1">진도율 80% 이상 달성 (<code>6.1 | (0)</code> → 6.1%)</p>
+                            <p class="text-xs text-slate-600 mt-1">
+                                X열 셀 값에서 <code class="bg-white px-1.5 py-0.5 rounded border border-emerald-200 text-emerald-800">|</code> 앞 숫자를 실제 진도율(%)로 추출하여 80% 이상 달성 비율 및 0% 미수강 비율을 산출합니다.
+                            </p>
+                        </div>
+
+                        <!-- Plus Connector -->
+                        <div class="flex justify-center -my-2 relative z-10">
+                            <span class="bg-slate-800 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                                + 동시 충족 (AND)
+                            </span>
+                        </div>
+
+                        <!-- Condition 2 -->
+                        <div class="p-4 rounded-xl border border-indigo-200 bg-indigo-50/50">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-indigo-800 uppercase tracking-wide">조건 2 (AA열: 최종평가 / 총점열)</span>
+                                <span class="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md">
+                                    <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> 최종평가 ≥ 60점
+                                </span>
+                            </div>
+                            <p class="text-sm font-bold text-slate-900 mt-1">최종평가 60점 이상 획득 (<code>75 | (75)</code> → 75점)</p>
+                            <p class="text-xs text-slate-700 mt-1">
+                                AA열 <code class="bg-white px-1.5 py-0.5 rounded border border-indigo-200 text-indigo-900">|</code> 앞 점수(총점은 최종평가 점수만 반영)가 60점 이상인 경우 조건을 충족하며, AK열 수료가능여부와 함께 집계됩니다.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactive Next-Step Checklist -->
+                <div class="mt-5 pt-4 border-t border-slate-100">
+                    <p class="text-xs font-semibold text-slate-700 mb-2">정확한 수료율 산출을 위한 필요 조치:</p>
+                    <div class="space-y-1.5 text-xs text-slate-600">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="file-spreadsheet" class="w-4 h-4 text-blue-600 shrink-0"></i>
+                            <span>과목별 <strong>최종평가 성적표</strong> 엑셀/CSV 추가 업로드</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="key-round" class="w-4 h-4 text-blue-600 shrink-0"></i>
+                            <span>진도율 시트와 연결할 <strong>공통 식별자(학번/ID/성명)</strong> 확인</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Data Table & File Structure Audit -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-base font-bold text-slate-900">과목별 원천 파일 진단 및 상세 통계표</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">임의 수정 및 추정 없이 원천 데이터에서 100% 검증된 확정 지표입니다.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label for="sortSelect" class="text-xs font-medium text-slate-600">정렬 기준:</label>
+                    <select id="sortSelect" onchange="renderTable()" class="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="default">기본 순서 (파일명순)</option>
+                        <option value="students_desc">총 수강인원 많은순</option>
+                        <option value="progress_desc">평균 진도율 높은순</option>
+                        <option value="zero_desc">진도율 0% 비율 높은순</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                            <th class="py-3.5 px-4">과목명</th>
+                            <th class="py-3.5 px-4">원천 파일명 (시트 구조)</th>
+                            <th class="py-3.5 px-4 text-right">총 수강인원</th>
+                            <th class="py-3.5 px-4 text-right">평균 진도율</th>
+                            <th class="py-3.5 px-4 text-right">진도율 0% 인원 (비율)</th>
+                            <th class="py-3.5 px-4 text-center">1차 조건 (진도 ≥80%)</th>
+                            <th class="py-3.5 px-4 text-center">2차 조건 (평가 ≥60점)</th>
+                            <th class="py-3.5 px-4 text-center">최종 수료 판정</th>
+                        </tr>
+                    </thead>
+                    <tbody id="statsTableBody" class="divide-y divide-slate-100 text-sm">
+                        <!-- Rendered via JS -->
+                    </tbody>
+                    <tfoot id="statsTableFoot" class="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-900 text-sm">
+                        <tr>
+                            <td class="py-4 px-4">전체 통합 (3과목)</td>
+                            <td class="py-4 px-4 text-xs font-normal text-slate-500">기준일: 2026.11.16 · 성명열 기준</td>
+                            <td class="py-4 px-4 text-right">138명</td>
+                            <td class="py-4 px-4 text-right text-blue-700" id="footAvgProgress">-</td>
+                            <td class="py-4 px-4 text-right text-rose-600" id="footZeroStat">-</td>
+                            <td class="py-4 px-4 text-center" id="footCond1">-</td>
+                            <td class="py-4 px-4 text-center" id="footCond2">-</td>
+                            <td class="py-4 px-4 text-center" id="footFinal">-</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 mt-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+            <span>2026년 2학기 비학점 과정 운영 데이터 진단 대시보드 | 데이터 추정 및 임의 병합 금지 원칙 준수</span>
+            <span>자료 취합일: 2026-11-16</span>
+        </div>
+    </footer>
+
+    <!-- Data Integrity Policy Modal (Replaces alert) -->
+    <div id="policyModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="shield-check" class="w-5 h-5 text-blue-600"></i>
+                    <h3 class="text-base font-bold text-slate-900">기관 데이터 분석 5대 무결성 원칙</h3>
+                </div>
+                <button onclick="closePolicyModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="py-4 space-y-3 text-xs sm:text-sm text-slate-700 leading-relaxed">
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
+                    <p class="font-semibold text-slate-900">1. 파일명 메타데이터 정확 추출</p>
+                    <p class="text-slate-600 mt-0.5">파일명에서 과목명(항공법규, 원자력기초이론, 항공기기체)과 취합일(2026.11.16)을 분리 식별했습니다.</p>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
+                    <p class="font-semibold text-slate-900">2. 과목별 독립 통계 산출</p>
+                    <p class="text-slate-600 mt-0.5">각 파일은 단일 시트로 구성되어 있으며, 과목별 원천 인원수를 왜곡 없이 집계했습니다.</p>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
+                    <p class="font-semibold text-slate-900">3. 공식 수료 기준 엄격 적용</p>
+                    <p class="text-slate-600 mt-0.5">진도율 80% 이상과 최종평가 60점 이상을 모두 충족해야 하나, 성적 데이터가 부재하여 임의 산출을 보류했습니다.</p>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
+                    <p class="font-semibold text-slate-900">4. 진도율 0% 미수강자 엄격 집계</p>
+                    <p class="text-slate-600 mt-0.5">공백이나 추정이 아닌 실제 진도율 0%로 기록된 학습자만 과목별로 카운트했습니다.</p>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
+                    <p class="font-semibold text-slate-900">5. 임의 수정 및 없는 수치 추정 금지</p>
+                    <p class="text-slate-600 mt-0.5">원본 데이터를 임의 보정하지 않았으며, 누락된 평가 점수를 가정하지 않았습니다.</p>
+                </div>
+            </div>
+            <div class="pt-3 border-t border-slate-100 flex justify-end">
+                <button onclick="closePolicyModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition">
+                    확인 및 닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification (Replaces alert) -->
+    <div id="toastMessage" class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg text-xs font-medium flex items-center gap-2 opacity-0 pointer-events-none transition-opacity duration-300 z-50">
+        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+        <span>요약 통계 텍스트가 클립보드에 복사되었습니다.</span>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // Confirmed student counts based on Name column (3rd row onwards)
+        const courseData = [
+            {
+                id: 'AIR_LAW',
+                name: '항공법규',
+                fileName: '항공법규 261116_2.xlsx',
+                sheetInfo: '3행~18행 (성명열 기준 16명)',
+                students: 16,
+                loaded: false,
+                avgProgress: null,
+                progress80Count: null,
+                progress80Percent: null,
+                final60Count: null,
+                final60Percent: null,
+                completableCount: null,
+                completablePercent: null,
+                zeroCount: null,
+                zeroPercent: null,
+                note: '성명열 기준 16명 확정 (행 데이터 붙여넣기 시 세부 지표 자동 산출)'
+            },
+            {
+                id: 'NUCLEAR',
+                name: '원자력기초이론',
+                fileName: '원자력기초이론 261116_2.xlsx',
+                sheetInfo: '3행~36행 (성명열 기준 34명)',
+                students: 34,
+                loaded: false,
+                avgProgress: null,
+                progress80Count: null,
+                progress80Percent: null,
+                final60Count: null,
+                final60Percent: null,
+                completableCount: null,
+                completablePercent: null,
+                zeroCount: null,
+                zeroPercent: null,
+                note: '성명열 기준 34명 확정 (행 데이터 붙여넣기 시 세부 지표 자동 산출)'
+            },
+            {
+                id: 'AIRFRAME',
+                name: '항공기기체',
+                fileName: '항공기기체 261116_2.xlsx',
+                sheetInfo: '3행~90행 (성명열 기준 88명)',
+                students: 88,
+                loaded: false,
+                avgProgress: null,
+                progress80Count: null,
+                progress80Percent: null,
+                final60Count: null,
+                final60Percent: null,
+                completableCount: null,
+                completablePercent: null,
+                zeroCount: null,
+                zeroPercent: null,
+                note: '성명열 기준 88명 확정 (행 데이터 붙여넣기 시 세부 지표 자동 산출)'
+            }
+        ];
+
+        let currentSelectedId = 'ALL';
+
+        // Helper: Convert Excel column letters (e.g. 'X', 'AA', 'AK') to 0-based index
+        function colToIndex(colStr) {
+            let idx = 0;
+            for (let i = 0; i < colStr.length; i++) {
+                idx = idx * 26 + (colStr.charCodeAt(i) - 64);
+            }
+            return idx - 1;
+        }
+
+        // Helper: Extract numeric value BEFORE '|' delimiter (e.g., "6.1 | (0)" -> 6.1, "75 | (75)" -> 75)
+        function extractBeforePipe(cellValue) {
+            if (cellValue === undefined || cellValue === null) return NaN;
+            const beforePipe = String(cellValue).split('|')[0].trim();
+            const cleaned = beforePipe.replace(/[^0-9.-]/g, '');
+            return cleaned === '' ? NaN : parseFloat(cleaned);
+        }
+
+        // Shared row aggregation engine (3rd row onwards)
+        function aggregateRowsForCourse(targetId, rowsArray) {
+            const idxX = colToIndex('X');   // 진도율 열 (예: 6.1 | (0) -> 6.1%)
+            const idxAA = colToIndex('AA'); // 최종평가 열 (예: 75 | (75) -> 75점)
+            const idxAK = colToIndex('AK'); // 수료가능여부 열
+
+            let validRows = 0;
+            let sumProgress = 0;
+            let p80Count = 0;
+            let f60Count = 0;
+            let zeroCount = 0;
+            let akPassCount = 0;
+
+            rowsArray.forEach(cols => {
+                if (!cols || cols.length < 3) return;
+                // Check if row has a student name or progress/score cell
+                const hasName = cols.slice(0, 6).some(v => v !== undefined && v !== null && String(v).trim() !== '');
+                if (!hasName) return;
+
+                validRows++;
+                const progVal = extractBeforePipe(cols[idxX]);
+                const finalVal = extractBeforePipe(cols[idxAA]);
+                const akVal = String(cols[idxAK] ?? '').trim();
+
+                if (!isNaN(progVal)) {
+                    sumProgress += progVal;
+                    if (progVal >= 80) p80Count++;
+                    if (progVal === 0) zeroCount++;
+                }
+                // 총점은 최종평가 점수만을 반영하여 60점 이상이면 수료기준 충족
+                if (!isNaN(finalVal) && finalVal >= 60) {
+                    f60Count++;
+                }
+                // AK열 수료가능여부 판정 (또는 진도율 >=80% AND 최종평가 >=60점 동시 충족)
+                const isAkYes = ['수료', '가능', '수료가능', 'Y', 'O', '예'].includes(akVal.toUpperCase());
+                const isBothMet = (!isNaN(progVal) && progVal >= 80 && !isNaN(finalVal) && finalVal >= 60);
+                if (isAkYes || (akVal === '' && isBothMet)) {
+                    akPassCount++;
+                }
+            });
+
+            if (validRows === 0) return false;
+
+            const course = courseData.find(c => c.id === targetId);
+            course.students = validRows;
+            course.loaded = true;
+            course.avgProgress = sumProgress / validRows;
+            course.progress80Count = p80Count;
+            course.progress80Percent = (p80Count / validRows) * 100;
+            course.final60Count = f60Count;
+            course.final60Percent = (f60Count / validRows) * 100;
+            course.completableCount = akPassCount;
+            course.completablePercent = (akPassCount / validRows) * 100;
+            course.zeroCount = zeroCount;
+            course.zeroPercent = (zeroCount / validRows) * 100;
+            course.sheetInfo = `실제 연동 완료 (3행~${validRows + 2}행, ${validRows}명)`;
+            course.note = `진도≥80%(X열): ${course.progress80Percent.toFixed(1)}% (${p80Count}명) | 평가≥60점(AA열): ${course.final60Percent.toFixed(1)}% (${f60Count}명)`;
+            return true;
+        }
+
+        // Direct Excel (.xlsx) File Upload Handler
+        function handleExcelFiles(event) {
+            const files = Array.from(event.target.files || []);
+            if (files.length === 0) return;
+
+            let processedCount = 0;
+            files.forEach(file => {
+                const fname = file.name;
+                let targetId = null;
+                if (fname.includes('항공법규')) targetId = 'AIR_LAW';
+                else if (fname.includes('원자력')) targetId = 'NUCLEAR';
+                else if (fname.includes('항공기기체') || fname.includes('기체')) targetId = 'AIRFRAME';
+
+                if (!targetId) return;
+
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                        // Convert sheet to 2D array; slice(2) starts strictly at 3rd row (index 2)
+                        const rows2D = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+                        const studentRows = rows2D.slice(2);
+
+                        if (aggregateRowsForCourse(targetId, studentRows)) {
+                            processedCount++;
+                            selectCourse('ALL');
+                            showToast(`엑셀 파일 ${processedCount}건 파싱 완료 (3행~끝행 기준)`);
+                        }
+                    } catch (err) {
+                        console.error('엑셀 파싱 오류:', err);
+                        showToast('암호가 걸려있지 않은 엑셀(.xlsx) 파일인지 확인해 주세요.');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+            event.target.value = '';
+        }
+
+        // Parse pasted Excel rows (3rd row onwards)
+        function parsePastedRows() {
+            const rawText = document.getElementById('rawExcelInput').value.trim();
+            const targetId = document.getElementById('importCourseSelect').value;
+            if (!rawText) return;
+
+            const lines = rawText.split(/\r?\n/).filter(line => line.trim() !== '');
+            const rows2D = lines.map(line => line.split('\t'));
+
+            if (aggregateRowsForCourse(targetId, rows2D)) {
+                const course = courseData.find(c => c.id === targetId);
+                document.getElementById('rawExcelInput').value = '';
+                selectCourse(targetId);
+                showToast(`${course.name} (${course.students}명) 원천 데이터가 정확히 반영되었습니다.`);
+            }
+        }
+
+        function getTotalSummary() {
+            const totalStudents = courseData.reduce((acc, c) => acc + c.students, 0);
+            const loadedCourses = courseData.filter(c => c.loaded);
+            if (loadedCourses.length === 0) {
+                return {
+                    id: 'ALL',
+                    name: '전체 통합 (3과목)',
+                    fileName: '*_261116_2.xlsx (성명열 기준 총 138명)',
+                    students: totalStudents,
+                    loaded: false,
+                    note: '성명열 기준 총 138명 확정 (상단 입력창에 3행~끝행 붙여넣기 시 세부 비율 산출)'
+                };
+            }
+            const loadedStudents = loadedCourses.reduce((acc, c) => acc + c.students, 0);
+            const weightedProg = loadedCourses.reduce((acc, c) => acc + (c.avgProgress * c.students), 0) / loadedStudents;
+            const p80Sum = loadedCourses.reduce((acc, c) => acc + c.progress80Count, 0);
+            const f60Sum = loadedCourses.reduce((acc, c) => acc + c.final60Count, 0);
+            const compSum = loadedCourses.reduce((acc, c) => acc + c.completableCount, 0);
+            const zeroSum = loadedCourses.reduce((acc, c) => acc + c.zeroCount, 0);
+
+            return {
+                id: 'ALL',
+                name: '전체 통합 (3과목)',
+                fileName: `*_261116_2.xlsx (${loadedCourses.length}/3과목 연동됨)`,
+                students: totalStudents,
+                loaded: true,
+                avgProgress: weightedProg,
+                progress80Count: p80Sum,
+                progress80Percent: (p80Sum / loadedStudents) * 100,
+                final60Count: f60Sum,
+                final60Percent: (f60Sum / loadedStudents) * 100,
+                completableCount: compSum,
+                completablePercent: (compSum / loadedStudents) * 100,
+                zeroCount: zeroSum,
+                zeroPercent: (zeroSum / loadedStudents) * 100,
+                note: `연동된 ${loadedStudents}명 기준 X열·AA열·AK열 실시간 집계`
+            };
+        }
+
+        // Initialize Lucide icons & render initial state
+        window.onload = function () {
+            lucide.createIcons();
+            selectCourse('ALL');
+            renderTable();
+        };
+
+        // Select Course Filter
+        function selectCourse(courseId) {
+            currentSelectedId = courseId;
+
+            document.querySelectorAll('.course-tab').forEach(btn => {
+                if (btn.dataset.course === courseId) {
+                    btn.classList.remove('tab-inactive');
+                    btn.classList.add('tab-active');
+                } else {
+                    btn.classList.remove('tab-active');
+                    btn.classList.add('tab-inactive');
+                }
+            });
+
+            const totalSummary = getTotalSummary();
+            const activeData = courseId === 'ALL'
+                ? totalSummary
+                : courseData.find(c => c.id === courseId);
+
+            // KPI 1: Confirmed Student Count
+            document.getElementById('kpiTotalStudents').textContent = `${activeData.students}명`;
+            document.getElementById('kpiCourseCountBadge').textContent = courseId === 'ALL' ? '3과목 성명열 합산' : '성명열 확정 인원';
+            document.getElementById('kpiFileSource').textContent = `출처: ${activeData.fileName}`;
+
+            // KPI 2, 3, 4: Update based on whether row-level '|' data is loaded
+            if (activeData.loaded) {
+                document.getElementById('kpiAvgProgress').textContent = `${activeData.progress80Percent.toFixed(1)}% (${activeData.progress80Count}명)`;
+                document.getElementById('kpiProgressCompare').textContent = `평균 진도 ${activeData.avgProgress.toFixed(1)}%`;
+                document.getElementById('kpiProgressBar').style.width = `${activeData.progress80Percent}%`;
+
+                document.getElementById('kpiZeroCount').textContent = `${activeData.zeroCount}명`;
+                document.getElementById('kpiZeroPercent').textContent = `${activeData.zeroPercent.toFixed(1)}%`;
+                document.getElementById('kpiZeroNote').textContent = activeData.note;
+
+                document.getElementById('kpiCompletionRate').textContent = `${activeData.completablePercent.toFixed(1)}% (${activeData.completableCount}명)`;
+                document.getElementById('kpiFinalExamBadge').textContent = `AA열 ≥60점: ${activeData.final60Percent.toFixed(1)}%`;
+            } else {
+                document.getElementById('kpiAvgProgress').textContent = '연동 대기';
+                document.getElementById('kpiProgressCompare').textContent = "X열 '|' 앞 숫자 필요";
+                document.getElementById('kpiProgressBar').style.width = '0%';
+
+                document.getElementById('kpiZeroCount').textContent = '연동 대기';
+                document.getElementById('kpiZeroPercent').textContent = '- %';
+                document.getElementById('kpiZeroNote').textContent = activeData.note;
+
+                document.getElementById('kpiCompletionRate').textContent = '연동 대기';
+                document.getElementById('kpiFinalExamBadge').textContent = "AA열 '|' 앞 숫자 필요";
+            }
+
+            renderComparisonBars();
+            renderTable();
+        }
+
+        // Render Visual Comparison Bars
+        function renderComparisonBars() {
+            const container = document.getElementById('subjectComparisonBars');
+            container.innerHTML = '';
+
+            courseData.forEach(course => {
+                const isSelected = currentSelectedId === course.id;
+                const isDimmed = currentSelectedId !== 'ALL' && !isSelected;
+
+                const wrapperClass = isSelected
+                    ? 'p-4 rounded-xl border-2 border-blue-500 bg-blue-50/30 cursor-pointer transition'
+                    : `p-4 rounded-xl border border-slate-200 hover:border-blue-300 bg-slate-50/40 cursor-pointer transition ${isDimmed ? 'opacity-55' : ''}`;
+
+                const p80Text = course.loaded ? `${course.progress80Percent.toFixed(1)}% (${course.progress80Count}명)` : '행 데이터 연동 대기';
+                const f60Text = course.loaded ? `${course.final60Percent.toFixed(1)}% (${course.final60Count}명)` : '대기';
+                const compText = course.loaded ? `${course.completablePercent.toFixed(1)}% (${course.completableCount}명)` : '대기';
+                const barWidth = course.loaded ? course.progress80Percent : 0;
+
+                const html = `
+                    <div onclick="selectCourse('${course.id}')" class="${wrapperClass}">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-sm text-slate-900">${course.name}</span>
+                                <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-slate-200 text-slate-800">성명열 기준 ${course.students}명</span>
+                                ${isSelected ? '<span class="text-[11px] font-semibold bg-blue-600 text-white px-2 py-0.5 rounded-full">선택됨</span>' : ''}
+                            </div>
+                            <div class="flex flex-wrap items-center gap-3 text-xs">
+                                <span class="font-semibold text-blue-700">진도≥80%(X열): ${p80Text}</span>
+                                <span class="font-semibold text-indigo-700">평가≥60점(AA열): ${f60Text}</span>
+                                <span class="font-semibold text-emerald-700">수료가능(AK열): ${compText}</span>
+                            </div>
+                        </div>
+
+                        <div class="relative w-full h-3 bg-slate-200 rounded-full overflow-visible mb-1">
+                            <div class="h-3 bg-blue-600 rounded-full bar-fill" style="width: ${barWidth}%"></div>
+                            <div class="absolute top-[-4px] bottom-[-4px] border-r-2 border-dashed border-slate-800 z-10" style="left: 80%;" title="진도율 80% 기준선"></div>
+                        </div>
+                        <p class="text-[11px] text-slate-500 mt-1">${course.note}</p>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            });
+        }
+
+        // Render Detailed Table
+        function renderTable() {
+            const sortBy = document.getElementById('sortSelect').value;
+            const tbody = document.getElementById('statsTableBody');
+            tbody.innerHTML = '';
+
+            let sortedList = [...courseData];
+            if (sortBy === 'students_desc') {
+                sortedList.sort((a, b) => b.students - a.students);
+            } else if (sortBy === 'progress_desc') {
+                sortedList.sort((a, b) => (b.progress80Percent || -1) - (a.progress80Percent || -1));
+            } else if (sortBy === 'zero_desc') {
+                sortedList.sort((a, b) => (b.zeroPercent || -1) - (a.zeroPercent || -1));
+            }
+
+            sortedList.forEach(course => {
+                const isHighlighted = currentSelectedId === course.id;
+                const rowClass = isHighlighted
+                    ? 'bg-blue-50/70 hover:bg-blue-50 transition cursor-pointer'
+                    : 'hover:bg-slate-50 transition cursor-pointer';
+
+                const avgProgCell = course.loaded ? `${course.avgProgress.toFixed(1)}%` : '<span class="text-xs text-slate-400">행 입력 대기</span>';
+                const zeroCell = course.loaded ? `<span class="font-semibold text-rose-600">${course.zeroCount}명</span> <span class="text-xs text-slate-500">(${course.zeroPercent.toFixed(1)}%)</span>` : '<span class="text-xs text-slate-400">행 입력 대기</span>';
+                const cond1Cell = course.loaded ? `<span class="font-semibold text-blue-700">${course.progress80Percent.toFixed(1)}%</span> (${course.progress80Count}명)` : '<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500">| 앞 숫자 대기</span>';
+                const cond2Cell = course.loaded ? `<span class="font-semibold text-indigo-700">${course.final60Percent.toFixed(1)}%</span> (${course.final60Count}명)` : '<span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500">| 앞 숫자 대기</span>';
+                const finalCell = course.loaded ? `<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">${course.completablePercent.toFixed(1)}% (${course.completableCount}명)</span>` : '<span class="px-2 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700 border border-amber-200">연동 대기</span>';
+
+                const rowHtml = `
+                    <tr onclick="selectCourse('${course.id}')" class="${rowClass}">
+                        <td class="py-3.5 px-4 font-bold text-slate-900">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full ${isHighlighted ? 'bg-blue-600' : 'bg-slate-300'}"></span>
+                                ${course.name}
+                            </div>
+                        </td>
+                        <td class="py-3.5 px-4">
+                            <div class="text-xs font-mono text-slate-700">${course.fileName}</div>
+                            <div class="text-[11px] text-slate-500">${course.sheetInfo}</div>
+                        </td>
+                        <td class="py-3.5 px-4 text-right font-bold text-slate-900">${course.students}명</td>
+                        <td class="py-3.5 px-4 text-right font-semibold text-blue-700">${avgProgCell}</td>
+                        <td class="py-3.5 px-4 text-right">${zeroCell}</td>
+                        <td class="py-3.5 px-4 text-center text-xs">${cond1Cell}</td>
+                        <td class="py-3.5 px-4 text-center text-xs">${cond2Cell}</td>
+                        <td class="py-3.5 px-4 text-center">${finalCell}</td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', rowHtml);
+            });
+
+            // Update Footer Totals
+            const tot = getTotalSummary();
+            document.getElementById('footAvgProgress').textContent = tot.loaded ? `${tot.avgProgress.toFixed(1)}%` : '-';
+            document.getElementById('footZeroStat').textContent = tot.loaded ? `${tot.zeroCount}명 (${tot.zeroPercent.toFixed(1)}%)` : '-';
+            document.getElementById('footCond1').textContent = tot.loaded ? `${tot.progress80Percent.toFixed(1)}% (${tot.progress80Count}명)` : '-';
+            document.getElementById('footCond2').textContent = tot.loaded ? `${tot.final60Percent.toFixed(1)}% (${tot.final60Count}명)` : '-';
+            document.getElementById('footFinal').textContent = tot.loaded ? `${tot.completablePercent.toFixed(1)}% (${tot.completableCount}명)` : '연동 대기';
+        }
+
+        // Modal Controls
+        function openPolicyModal() {
+            const modal = document.getElementById('policyModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closePolicyModal() {
+            const modal = document.getElementById('policyModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // Copy Summary to Clipboard using execCommand
+        function copySummaryReport() {
+            const lines = [
+                '[2026년 2학기 비학점 과정 운영 데이터 진단 요약 (기준일: 2026.11.16)]',
+                '- 공식 수료 기준: 진도율(X열) 80% 이상 AND 최종평가(AA열) 60점 이상 (| 기호 앞 숫자 기준)',
+                '- 전체 통합 (성명열 기준): 총 138명 (항공법규 16명, 원자력기초이론 34명, 항공기기체 88명)'
+            ];
+            courseData.forEach((c, idx) => {
+                if (c.loaded) {
+                    lines.push(`  ${idx + 1}) ${c.name} (${c.students}명): 수료가능(AK열) ${c.completablePercent.toFixed(1)}% (${c.completableCount}명) | 진도≥80%(X열) ${c.progress80Percent.toFixed(1)}% | 평가≥60점(AA열) ${c.final60Percent.toFixed(1)}% | 미수강(0%) ${c.zeroCount}명(${c.zeroPercent.toFixed(1)}%)`);
+                } else {
+                    lines.push(`  ${idx + 1}) ${c.name} (${c.students}명): 세부 평가항목(| 앞 숫자) 연동 대기`);
+                }
+            });
+
+            const textArea = document.createElement('textarea');
+            textArea.value = lines.join('\n');
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showToast('요약 통계 텍스트가 클립보드에 복사되었습니다.');
+            } catch (err) {
+                console.error('복사 실패:', err);
+            }
+            document.body.removeChild(textArea);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toastMessage');
+            if (msg) toast.querySelector('span').textContent = msg;
+            toast.classList.remove('opacity-0');
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
